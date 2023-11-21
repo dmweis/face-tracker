@@ -1,6 +1,12 @@
 [package]
+authors = ["David Weis <davidmichaelweis@gmail.com>"]
+description = "Face tracker"
 edition = "2021"
+license = "MIT OR APACHE"
 name = "face-tracker"
+publish = false
+readme = "README.md"
+repository = "https://github.com/dmweis/face-tracker"
 version = "0.1.0"
 
 [dependencies]
