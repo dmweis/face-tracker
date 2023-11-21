@@ -28,5 +28,6 @@ fn main() -> anyhow::Result<()> {
 
         let debug_frame = face_tracker.process_frame(&frame)?;
         highgui::imshow(window, &debug_frame)?;
+        _ = highgui::poll_key()?;
     }
 }
