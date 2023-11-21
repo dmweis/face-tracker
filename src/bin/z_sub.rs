@@ -59,7 +59,10 @@ async fn main() -> anyhow::Result<()> {
         let payload: Vec<u8> = msg.value.try_into()?;
 
         let buffer: opencv::core::Vector<u8> = opencv::core::Vector::from_slice(&payload);
-        let frame = opencv::imgcodecs::imdecode(&buffer, 1)?;
+        let frame = opencv::imgcodecs::imdecode(
+            &buffer,
+            opencv::imgcodecs::ImreadModes::IMREAD_COLOR as i32,
+        )?;
 
         let debug_frame = face_tracker.process_frame(&frame)?;
         highgui::imshow(window, &debug_frame)?;
