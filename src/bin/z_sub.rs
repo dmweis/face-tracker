@@ -1,5 +1,5 @@
 use clap::Parser;
-use face_tracker::{ErrorWrapper, FaceTracker};
+use face_tracker::{jpeg_to_mat, ErrorWrapper, FaceTracker};
 use opencv::highgui;
 use zenoh::prelude::r#async::*;
 
@@ -58,11 +58,7 @@ async fn main() -> anyhow::Result<()> {
         let msg = subscriber.recv_async().await?;
         let payload: Vec<u8> = msg.value.try_into()?;
 
-        let buffer: opencv::core::Vector<u8> = opencv::core::Vector::from_slice(&payload);
-        let frame = opencv::imgcodecs::imdecode(
-            &buffer,
-            opencv::imgcodecs::ImreadModes::IMREAD_COLOR as i32,
-        )?;
+        let frame = jpeg_to_mat(&payload)?;
 
         let debug_frame = face_tracker.process_frame(&frame)?;
         highgui::imshow(window, &debug_frame)?;

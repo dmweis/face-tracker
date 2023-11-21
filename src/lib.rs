@@ -205,6 +205,39 @@ pub fn convert_to_grayscale(image: &Mat) -> anyhow::Result<Mat> {
     Ok(gray)
 }
 
+pub fn jpeg_to_mat(data: &[u8]) -> anyhow::Result<Mat> {
+    let buffer: Vector<u8> = opencv::core::Vector::from_slice(data);
+    let frame =
+        opencv::imgcodecs::imdecode(&buffer, opencv::imgcodecs::ImreadModes::IMREAD_COLOR as i32)?;
+    Ok(frame)
+}
+
+pub struct CameraSource {
+    source: opencv::videoio::VideoCapture,
+}
+
+impl CameraSource {
+    pub fn new(index: i32) -> anyhow::Result<Self> {
+        let camera = opencv::videoio::VideoCapture::new(index, opencv::videoio::CAP_ANY)?;
+        let opened = opencv::videoio::VideoCapture::is_opened(&camera)?;
+        if !opened {
+            anyhow::bail!("Unable to open default camera!");
+        }
+        Ok(Self { source: camera })
+    }
+
+    pub fn next_reuse(&mut self, frame: &mut Mat) -> anyhow::Result<()> {
+        self.source.read(frame)?;
+        Ok(())
+    }
+
+    pub fn next_frame(&mut self) -> anyhow::Result<Mat> {
+        let mut frame = Mat::default();
+        self.next_reuse(&mut frame)?;
+        Ok(frame)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum ErrorWrapper {
     #[error("Zenoh error {0:?}")]
