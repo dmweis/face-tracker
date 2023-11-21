@@ -1,5 +1,5 @@
 use clap::Parser;
-use face_tracker::ErrorWrapper;
+use face_tracker::{mat_to_jpeg, ErrorWrapper};
 use opencv::{highgui, prelude::*, videoio};
 use std::{thread, time::Duration};
 use zenoh::prelude::r#async::*;
@@ -68,11 +68,7 @@ async fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        let mut buffer: opencv::core::Vector<u8> = Default::default();
-
-        opencv::imgcodecs::imencode_def(".jpg", &frame, &mut buffer)?;
-
-        let data = buffer.to_vec();
+        let data = mat_to_jpeg(&frame)?;
 
         publisher
             .put(data)

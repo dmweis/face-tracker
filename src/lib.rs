@@ -212,6 +212,12 @@ pub fn jpeg_to_mat(data: &[u8]) -> anyhow::Result<Mat> {
     Ok(frame)
 }
 
+pub fn mat_to_jpeg(image: &Mat) -> anyhow::Result<Vec<u8>> {
+    let mut buffer: opencv::core::Vector<u8> = Default::default();
+    opencv::imgcodecs::imencode_def(".jpg", &image, &mut buffer)?;
+    Ok(buffer.to_vec())
+}
+
 pub struct CameraSource {
     source: opencv::videoio::VideoCapture,
 }
