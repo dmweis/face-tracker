@@ -1,5 +1,4 @@
-use opencv::core::Point2f;
-use opencv::core::Vector;
+use opencv::core::{Point, Point2f, Rect, Size, Vector};
 use opencv::prelude::*;
 use opencv::types::VectorOfRect;
 use opencv::{core, imgproc, objdetect, types};
@@ -25,7 +24,7 @@ impl FaceTracker {
         let mut debug_frame = frame.clone();
         let frame_grayscale = convert_to_grayscale(frame)?;
 
-        if !self.tracked_points.is_empty() {
+        if self.tracked_points.len() > 6 {
             // have tracked points
             if let Some(previous_frame_grayscale) = &self.previous_frame_grayscale {
                 let new_tracked_points = track_points(
@@ -36,13 +35,19 @@ impl FaceTracker {
 
                 // draw on debug frame
                 for feature in &new_tracked_points {
-                    let center = opencv::core::Point {
+                    // convert to ints
+                    let center = Point {
                         x: feature.x as i32,
                         y: feature.y as i32,
                     };
                     imgproc::circle_def(&mut debug_frame, center, 5, (0, 0, 255).into())?;
                 }
+
+                let face_rect = find_face_rectangle(&new_tracked_points)?;
+                imgproc::rectangle_def(&mut debug_frame, face_rect, (0, 255, 255).into())?;
+
                 self.tracked_points = new_tracked_points;
+                self.previous_frame_grayscale = Some(frame_grayscale);
                 return Ok(debug_frame);
             }
         }
@@ -59,7 +64,8 @@ impl FaceTracker {
             let features = find_features(&frame_grayscale, largest_face)?;
             // draw on debug frame
             for feature in &features {
-                let center = opencv::core::Point {
+                // convert to ints
+                let center = Point {
                     x: feature.x as i32,
                     y: feature.y as i32,
                 };
@@ -93,11 +99,11 @@ impl FaceDetector {
             1.1,
             2,
             objdetect::CASCADE_SCALE_IMAGE,
-            core::Size {
+            Size {
                 width: 30,
                 height: 30,
             },
-            core::Size {
+            Size {
                 width: 0,
                 height: 0,
             },
@@ -106,17 +112,15 @@ impl FaceDetector {
     }
 }
 
-pub fn find_largest_face(faces: &VectorOfRect) -> Option<opencv::core::Rect> {
+pub fn find_largest_face(faces: &VectorOfRect) -> Option<Rect> {
     faces
         .into_iter()
         .max_by(|a, b| (a.height * a.width).cmp(&(b.height * b.width)))
 }
 
-pub fn find_features(
-    image: &Mat,
-    face: opencv::core::Rect,
-) -> anyhow::Result<opencv::core::Vector<Point2f>> {
+pub fn find_features(image: &Mat, face: Rect) -> anyhow::Result<Vector<Point2f>> {
     let mut mask: Mat = Mat::zeros_size(image.size().unwrap(), image.typ())?.to_mat()?;
+    // create mask
     imgproc::rectangle(
         &mut mask,
         face,
@@ -126,14 +130,15 @@ pub fn find_features(
         0,
     )?;
 
-    let mut corners: opencv::core::Vector<Point2f> = Default::default();
+    let mut corners: Vector<Point2f> = Default::default();
     opencv::imgproc::good_features_to_track(
         image,
         &mut corners,
-        1000,
+        200,
         0.02,
         7.0,
         &mask,
+        // defaults
         3,
         false,
         0.04,
@@ -142,16 +147,16 @@ pub fn find_features(
 }
 
 pub fn track_points(
-    frame: &Mat,
+    image: &Mat,
     previous_frame: &Mat,
-    keypoints: &opencv::core::Vector<Point2f>,
-) -> anyhow::Result<opencv::core::Vector<Point2f>> {
+    keypoints: &Vector<Point2f>,
+) -> anyhow::Result<Vector<Point2f>> {
     // output moved points
-    let mut moved_points: opencv::core::Vector<Point2f> = Default::default();
+    let mut moved_points: Vector<Point2f> = Default::default();
     // 1 or 0 if the point motion was detected
-    let mut status: opencv::core::Vector<u8> = Default::default();
+    let mut status: Vector<u8> = Default::default();
     // error of point motion
-    let mut error_rep: opencv::core::Vector<f32> = Default::default();
+    let mut error_rep: Vector<f32> = Default::default();
 
     let criteria = opencv::core::TermCriteria {
         typ: (opencv::core::TermCriteria_EPS | opencv::core::TermCriteria_COUNT),
@@ -161,7 +166,7 @@ pub fn track_points(
 
     opencv::video::calc_optical_flow_pyr_lk(
         previous_frame,
-        frame,
+        image,
         keypoints,
         &mut moved_points,
         &mut status,
@@ -169,24 +174,29 @@ pub fn track_points(
         (10, 10).into(),
         2,
         criteria,
+        // defaults
         0,
         1e-4,
     )?;
 
     // get successfully tracked points
     // status is 0 or 1. 0 if the flow wasn't found
-
-    let mut matched_moved_points: opencv::core::Vector<Point2f> = Default::default();
-
+    let mut matched_moved_points: Vector<Point2f> = Default::default();
     for i in 0..moved_points.len() {
         if status.get(i).unwrap_or_default() == 1 {
-            matched_moved_points.push(moved_points.get(i).unwrap());
+            let error = error_rep.get(i).unwrap_or(20.0);
+            if error < 5.0 {
+                matched_moved_points.push(moved_points.get(i).unwrap());
+            }
         }
     }
 
-    println!("{:?}", error_rep);
-
     Ok(matched_moved_points)
+}
+
+fn find_face_rectangle(keypoints: &Vector<Point2f>) -> anyhow::Result<Rect> {
+    let rect = opencv::imgproc::bounding_rect(&keypoints)?;
+    Ok(rect)
 }
 
 pub fn convert_to_grayscale(image: &Mat) -> anyhow::Result<Mat> {

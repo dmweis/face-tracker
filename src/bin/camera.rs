@@ -1,10 +1,6 @@
 use face_tracker::FaceTracker;
-use opencv::highgui;
-use opencv::prelude::*;
-use std::thread;
-use std::time::Duration;
-
-use opencv::videoio;
+use opencv::{highgui, prelude::*, videoio};
+use std::{thread, time::Duration};
 
 fn main() -> anyhow::Result<()> {
     let window = "video capture";
@@ -22,7 +18,7 @@ fn main() -> anyhow::Result<()> {
         let mut frame = Mat::default();
         cam.read(&mut frame)?;
         if frame.size()?.width == 0 {
-            thread::sleep(Duration::from_secs(50));
+            thread::sleep(Duration::from_secs(5));
             continue;
         }
 

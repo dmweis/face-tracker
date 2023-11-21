@@ -1,10 +1,6 @@
 use clap::Parser;
-use face_tracker::ErrorWrapper;
+use face_tracker::{ErrorWrapper, FaceTracker};
 use opencv::highgui;
-use opencv::prelude::*;
-use opencv::videoio;
-use std::thread;
-use std::time::Duration;
 use zenoh::prelude::r#async::*;
 
 #[derive(Parser, Debug)]
@@ -49,41 +45,24 @@ async fn main() -> anyhow::Result<()> {
         .map_err(ErrorWrapper::ZenohError)?;
     let zenoh_session = zenoh_session.into_arc();
 
-    let publisher = zenoh_session
-        .declare_publisher("face-tracker/image")
-        .congestion_control(CongestionControl::Drop)
-        .priority(Priority::InteractiveHigh)
+    let subscriber = zenoh_session
+        .declare_subscriber("face-tracker/image")
+        .best_effort()
         .res()
         .await
         .map_err(ErrorWrapper::ZenohError)?;
 
-    let mut cam = videoio::VideoCapture::new(0, videoio::CAP_ANY)?;
-    let opened = videoio::VideoCapture::is_opened(&cam)?;
-    if !opened {
-        panic!("Unable to open default camera!");
-    }
+    let mut face_tracker = FaceTracker::new()?;
 
     loop {
-        let mut frame = Mat::default();
-        cam.read(&mut frame)?;
-        if frame.size()?.width == 0 {
-            thread::sleep(Duration::from_secs(50));
-            continue;
-        }
+        let msg = subscriber.recv_async().await?;
+        let payload: Vec<u8> = msg.value.try_into()?;
 
-        let mut buffer: opencv::core::Vector<u8> = Default::default();
+        let buffer: opencv::core::Vector<u8> = opencv::core::Vector::from_slice(&payload);
+        let frame = opencv::imgcodecs::imdecode(&buffer, 1)?;
 
-        opencv::imgcodecs::imencode_def(".jpg", &frame, &mut buffer)?;
-
-        let data = buffer.to_vec();
-
-        publisher
-            .put(data)
-            .res()
-            .await
-            .map_err(ErrorWrapper::ZenohError)?;
-
-        highgui::imshow(window, &frame)?;
+        let debug_frame = face_tracker.process_frame(&frame)?;
+        highgui::imshow(window, &debug_frame)?;
         _ = highgui::poll_key()?;
     }
 }
