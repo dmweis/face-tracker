@@ -1,6 +1,7 @@
 use opencv::core::{Point, Point2f, Rect, Size, Vector};
 use opencv::prelude::*;
 use opencv::types::VectorOfRect;
+use opencv::videoio::{CAP_PROP_FRAME_HEIGHT, CAP_PROP_FRAME_WIDTH};
 use opencv::{core, imgproc, objdetect, types};
 use thiserror::Error;
 
@@ -285,6 +286,23 @@ impl CameraSource {
         let opened = opencv::videoio::VideoCapture::is_opened(&camera)?;
         if !opened {
             anyhow::bail!("Unable to open default camera!");
+        }
+        Ok(Self { source: camera })
+    }
+
+    pub fn new_with_resolution(index: i32, width: f64, height: f64) -> anyhow::Result<Self> {
+        let mut camera = opencv::videoio::VideoCapture::new(index, opencv::videoio::CAP_ANY)?;
+        let opened = opencv::videoio::VideoCapture::is_opened(&camera)?;
+        if !opened {
+            anyhow::bail!("Unable to open default camera!");
+        }
+        let res = camera.set(CAP_PROP_FRAME_WIDTH, width)?;
+        if !res {
+            anyhow::bail!("Failed to set frame width");
+        }
+        let res = camera.set(CAP_PROP_FRAME_HEIGHT, height)?;
+        if !res {
+            anyhow::bail!("Failed to set frame height");
         }
         Ok(Self { source: camera })
     }
