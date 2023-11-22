@@ -8,6 +8,8 @@ pub struct FaceTracker {
     face_detector: FaceDetector,
     tracked_points: Vector<Point2f>,
     previous_frame_grayscale: Option<Mat>,
+    image_metadata: DetectionPoint,
+    face_detection: Option<FaceDetection>,
 }
 
 impl FaceTracker {
@@ -17,10 +19,24 @@ impl FaceTracker {
             face_detector,
             tracked_points: Default::default(),
             previous_frame_grayscale: None,
+            image_metadata: Default::default(),
+            face_detection: None,
         })
     }
 
+    pub fn image_metadata(&self) -> DetectionPoint {
+        self.image_metadata
+    }
+
+    pub fn face_detection(&self) -> Option<FaceDetection> {
+        self.face_detection
+    }
+
     pub fn process_frame(&mut self, frame: &Mat) -> anyhow::Result<Mat> {
+        self.image_metadata = DetectionPoint {
+            x: frame.cols(),
+            y: frame.rows(),
+        };
         let mut debug_frame = frame.clone();
         let frame_grayscale = convert_to_grayscale(frame)?;
 
@@ -48,6 +64,19 @@ impl FaceTracker {
 
                 self.tracked_points = new_tracked_points;
                 self.previous_frame_grayscale = Some(frame_grayscale);
+
+                // set detected face
+                self.face_detection = Some(FaceDetection {
+                    top_left: DetectionPoint {
+                        x: face_rect.x,
+                        y: face_rect.y,
+                    },
+                    size: DetectionPoint {
+                        x: face_rect.width,
+                        y: face_rect.height,
+                    },
+                });
+
                 return Ok(debug_frame);
             }
         }
@@ -73,10 +102,38 @@ impl FaceTracker {
             }
             self.tracked_points = features;
             self.previous_frame_grayscale = Some(frame_grayscale);
+            // set detected face
+            self.face_detection = Some(FaceDetection {
+                top_left: DetectionPoint {
+                    x: largest_face.x,
+                    y: largest_face.y,
+                },
+                size: DetectionPoint {
+                    x: largest_face.width,
+                    y: largest_face.height,
+                },
+            });
+        } else {
+            // clear face detection in case we don't detect anything
+            self.face_detection = None;
         }
 
         Ok(debug_frame)
     }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DetectionPoint {
+    /// width
+    pub x: i32,
+    /// height
+    pub y: i32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FaceDetection {
+    pub top_left: DetectionPoint,
+    pub size: DetectionPoint,
 }
 
 pub struct FaceDetector {
